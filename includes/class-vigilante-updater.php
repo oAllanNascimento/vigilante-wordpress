@@ -28,6 +28,12 @@ class Vigilante_Updater {
         add_filter('plugins_api', [__CLASS__, 'plugin_info'], 10, 3);
         add_filter('upgrader_source_selection', [__CLASS__, 'fix_directory_name'], 10, 4);
         add_action('upgrader_process_complete', [__CLASS__, 'clear_cache'], 10, 2);
+
+        // Link "Verificar atualizações" na lista de plugins
+        $plugin_slug = plugin_basename(VIGILANTE_PLUGIN_FILE);
+        add_filter('plugin_action_links_' . $plugin_slug, [__CLASS__, 'add_check_update_link']);
+        add_action('admin_init', [__CLASS__, 'handle_force_check']);
+        add_action('admin_notices', [__CLASS__, 'show_check_notice']);
     }
 
     /**
@@ -205,6 +211,59 @@ class Vigilante_Updater {
         if ($options['action'] === 'update' && $options['type'] === 'plugin') {
             delete_transient(self::CACHE_KEY);
         }
+    }
+
+    /**
+     * Exibe notice após verificação forçada.
+     */
+    public static function show_check_notice() {
+        if (empty($_GET['vigilante_update_checked'])) {
+            return;
+        }
+
+        $plugin_slug = plugin_basename(VIGILANTE_PLUGIN_FILE);
+        $update_plugins = get_site_transient('update_plugins');
+        $has_update = isset($update_plugins->response[$plugin_slug]);
+
+        if ($has_update) {
+            $new_version = $update_plugins->response[$plugin_slug]->new_version;
+            echo '<div class="notice notice-warning"><p><strong>Vigilante WP:</strong> Nova versão disponível: <strong>' . esc_html($new_version) . '</strong> (atual: ' . esc_html(VIGILANTE_VERSION) . ')</p></div>';
+        } else {
+            echo '<div class="notice notice-success is-dismissible"><p><strong>Vigilante WP:</strong> Você está usando a versão mais recente (' . esc_html(VIGILANTE_VERSION) . ').</p></div>';
+        }
+    }
+
+    /**
+     * Adiciona link "Verificar atualizações" na linha do plugin.
+     */
+    public static function add_check_update_link($links) {
+        $url = wp_nonce_url(
+            admin_url('plugins.php?vigilante_force_update_check=1'),
+            'vigilante_force_update_check'
+        );
+        $links[] = '<a href="' . esc_url($url) . '">Verificar atualizações</a>';
+        return $links;
+    }
+
+    /**
+     * Processa o clique no link "Verificar atualizações".
+     */
+    public static function handle_force_check() {
+        if (empty($_GET['vigilante_force_update_check'])) {
+            return;
+        }
+        if (!current_user_can('update_plugins') || !wp_verify_nonce($_GET['_wpnonce'], 'vigilante_force_update_check')) {
+            return;
+        }
+
+        self::force_check();
+
+        // Dispara verificação imediata do WordPress
+        wp_update_plugins();
+
+        // Redireciona de volta sem os parâmetros na URL
+        wp_safe_redirect(admin_url('plugins.php?vigilante_update_checked=1'));
+        exit;
     }
 
     /**
