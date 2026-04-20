@@ -185,6 +185,10 @@ if (!defined('ABSPATH')) exit;
         <h3>Informações do Sistema</h3>
         <table class="widefat" style="max-width: 500px;">
             <tr>
+                <td><strong>Versão</strong></td>
+                <td><?php echo esc_html(VIGILANTE_VERSION); ?></td>
+            </tr>
+            <tr>
                 <td><strong>Método de e-mail</strong></td>
                 <td><?php echo esc_html($diag['method']); ?></td>
             </tr>
