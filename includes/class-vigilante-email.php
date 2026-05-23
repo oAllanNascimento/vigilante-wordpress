@@ -80,7 +80,6 @@ class Vigilante_Email {
 
     /**
      * Criptografa a senha SMTP para armazenamento.
-     * Usa AUTH_KEY do WordPress como chave (disponível em toda instalação).
      */
     public static function encrypt_password($plain) {
         if (empty($plain)) return '';
@@ -106,10 +105,25 @@ class Vigilante_Email {
     }
 
     /**
-     * Retorna chave de criptografia derivada do AUTH_KEY do WordPress.
+     * Chave de criptografia da senha SMTP, persistida em wp_options.
+     *
+     * Why: a versão anterior derivava a chave do AUTH_KEY. Quando o operador
+     * rotaciona as salts do wp-config (procedimento padrão pós-incidente), a
+     * senha SMTP guardada vira lixo e o envio passa a falhar com "Não foi
+     * possível autenticar" sem nenhum sinal claro de causa. A chave própria
+     * sobrevive à rotação de salts.
      */
     private static function get_encryption_key() {
-        return hash('sha256', (defined('AUTH_KEY') ? AUTH_KEY : 'vigilante-fallback-key'), true);
+        $stored = get_option('vigilante_crypto_key');
+        if (!empty($stored)) {
+            $raw = base64_decode($stored, true);
+            if ($raw !== false && strlen($raw) === 32) {
+                return $raw;
+            }
+        }
+        $raw = openssl_random_pseudo_bytes(32);
+        update_option('vigilante_crypto_key', base64_encode($raw), false);
+        return $raw;
     }
 
     /**
