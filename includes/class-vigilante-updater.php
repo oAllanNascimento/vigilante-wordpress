@@ -39,6 +39,12 @@ class Vigilante_Updater {
     /**
      * Consulta a API do GitHub para a última release.
      * Resultado cacheado por CACHE_TTL.
+     *
+     * Why /releases em vez de /releases/latest: o endpoint "latest" da API
+     * do GitHub exclui pre-releases por design. Como o plugin está em fase
+     * beta (todas as releases marcadas como prerelease), "latest" retorna
+     * 404 e o updater nunca vê atualização. /releases devolve a lista
+     * completa em ordem cronológica reversa — basta pegar o primeiro item.
      */
     private static function get_remote_release() {
         $cached = get_transient(self::CACHE_KEY);
@@ -47,7 +53,7 @@ class Vigilante_Updater {
         }
 
         $url = sprintf(
-            'https://api.github.com/repos/%s/%s/releases/latest',
+            'https://api.github.com/repos/%s/%s/releases?per_page=1',
             self::GITHUB_OWNER,
             self::GITHUB_REPO
         );
@@ -65,7 +71,8 @@ class Vigilante_Updater {
             return null;
         }
 
-        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $list = json_decode(wp_remote_retrieve_body($response), true);
+        $body = is_array($list) && !empty($list[0]) ? $list[0] : null;
         if (empty($body['tag_name'])) {
             return null;
         }
