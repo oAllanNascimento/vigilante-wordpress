@@ -23,6 +23,7 @@ require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-email.php';
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-file-scanner.php';
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-monitor.php';
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-admin.php';
+require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-updater.php';
 
 /**
  * Inicialização do plugin.
@@ -33,6 +34,7 @@ function vigilante_init() {
 
     if (is_admin()) {
         Vigilante_Admin::init();
+        Vigilante_Updater::init();
     }
 }
 add_action('plugins_loaded', 'vigilante_init');
