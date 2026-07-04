@@ -2,7 +2,7 @@
 /**
  * Vigilante_Admin
  *
- * Página de administração do plugin — configurações, logs e diagnóstico.
+ * Página de administração do plugin, configurações, logs e diagnóstico.
  */
 
 if (!defined('ABSPATH')) exit;
@@ -112,6 +112,7 @@ class Vigilante_Admin {
                 'alert_file_changes' => isset($_POST['vigilante_alert_files']),
                 'alert_login_failed' => isset($_POST['vigilante_alert_login']),
                 'max_failed_logins'  => max(3, min(50, intval($_POST['vigilante_max_failed'] ?? 5))),
+                'report_frequency'   => in_array($_POST['vigilante_report_frequency'] ?? '', ['daily', 'weekly'], true) ? $_POST['vigilante_report_frequency'] : 'daily',
                 // SMTP
                 'smtp_enabled'       => isset($_POST['vigilante_smtp_enabled']),
                 'smtp_host'          => sanitize_text_field($_POST['vigilante_smtp_host'] ?? ''),
@@ -131,37 +132,39 @@ class Vigilante_Admin {
             }
 
             update_option(self::SETTINGS_OPTION, $settings);
+
+            // Reagenda o relatório se a frequência mudou.
+            if (($old_settings['report_frequency'] ?? 'daily') !== $settings['report_frequency']
+                && function_exists('vigilante_schedule_report')) {
+                vigilante_schedule_report($settings['report_frequency']);
+            }
+
             self::notice('Configurações salvas.');
         }
 
         if (isset($_POST['vigilante_test_email']) && self::verify_nonce('settings')) {
-            $has_smtp = !empty(Vigilante_Email::get_diagnostics()['smtp_plugins']);
-            if (!$has_smtp) {
-                self::notice_no_smtp();
-            } else {
-                $sent = Vigilante_Email::send_test();
-                if ($sent) {
-                    $email = get_option(self::SETTINGS_OPTION, [])['email'] ?? get_option('admin_email');
-                    self::notice("E-mail de teste enviado para <strong>" . esc_html($email) . "</strong>. Verifique sua caixa (e o spam).");
-                } else {
-                    $error = Vigilante_Email::get_last_error();
-                    self::notice_email_failure($error);
+            $sent = Vigilante_Email::send_test();
+            if ($sent) {
+                $email  = get_option(self::SETTINGS_OPTION, [])['email'] ?? get_option('admin_email');
+                $method = Vigilante_Email::detect_mail_method();
+                $msg    = "E-mail de teste enviado para <strong>" . esc_html($email) . "</strong>. Verifique sua caixa (e o spam).";
+                if (str_contains($method, 'mail() nativa')) {
+                    $msg .= " Atenção: este site usa a função mail() nativa do PHP, que pode reportar sucesso mesmo sem entregar. Se o e-mail não chegar, configure o SMTP abaixo.";
                 }
+                self::notice($msg);
+            } else {
+                $error = Vigilante_Email::get_last_error();
+                self::notice_email_failure($error);
             }
         }
 
         if (isset($_POST['vigilante_send_report']) && self::verify_nonce('settings')) {
-            $has_smtp = !empty(Vigilante_Email::get_diagnostics()['smtp_plugins']);
-            if (!$has_smtp) {
-                self::notice_no_smtp();
+            $sent = Vigilante_Email::send_daily_report();
+            if ($sent) {
+                self::notice('Relatório enviado por e-mail.');
             } else {
-                $sent = Vigilante_Email::send_daily_report();
-                if ($sent) {
-                    self::notice('Relatório enviado por e-mail.');
-                } else {
-                    $error = Vigilante_Email::get_last_error();
-                    self::notice_email_failure($error);
-                }
+                $error = Vigilante_Email::get_last_error();
+                self::notice_email_failure($error);
             }
         }
 
@@ -183,7 +186,7 @@ class Vigilante_Admin {
 
     /**
      * Exibe notice no admin.
-     * $message é escapado por padrão — apenas tags seguras são permitidas.
+     * $message é escapado por padrão, apenas tags seguras são permitidas.
      */
     private static function notice($message, $type = 'updated') {
         $allowed_html = [
@@ -192,31 +195,6 @@ class Vigilante_Admin {
             'code'   => [],
         ];
         echo '<div class="' . esc_attr($type) . '"><p>' . wp_kses($message, $allowed_html) . '</p></div>';
-    }
-
-    /**
-     * Exibe erro quando não há SMTP configurado.
-     * Bloqueia o envio — sem SMTP não tenta enviar.
-     */
-    private static function notice_no_smtp() {
-        ?>
-        <div class="error vigilante-email-failure-notice">
-            <h3 style="margin-top:10px;">&#9888; SMTP não configurado — e-mail não enviado</h3>
-            <p>Sem SMTP configurado, os e-mails <strong>não serão entregues</strong>.
-            Configure o SMTP antes de testar o envio.</p>
-
-            <div class="vigilante-guia-rapido">
-                <h4>Como configurar:</h4>
-                <ol>
-                    <li>Nesta mesma página, na seção <strong>Configuração SMTP</strong>, marque <strong>"Ativar SMTP"</strong></li>
-                    <li>Preencha os dados do seu provedor de e-mail (servidor, porta, usuário e senha)</li>
-                    <li>Clique em <strong>Salvar Configurações</strong></li>
-                    <li>Depois clique em <strong>Testar E-mail</strong> novamente</li>
-                </ol>
-                <p><em>Consulte a tabela de provedores na seção SMTP para ver os dados do seu e-mail.</em></p>
-            </div>
-        </div>
-        <?php
     }
 
     /**

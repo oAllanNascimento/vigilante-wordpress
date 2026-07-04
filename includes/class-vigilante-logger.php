@@ -2,7 +2,7 @@
 /**
  * Vigilante_Logger
  *
- * Sistema de logs do plugin — armazena eventos de segurança e tentativas de email.
+ * Sistema de logs do plugin, armazena eventos de segurança e tentativas de email.
  */
 
 if (!defined('ABSPATH')) exit;
@@ -33,7 +33,7 @@ class Vigilante_Logger {
             usleep(50000); // 50ms
         }
 
-        // Timeout — forçar liberação (lock possivelmente órfão)
+        // Timeout, forçar liberação (lock possivelmente órfão)
         delete_transient($lock_key);
         set_transient($lock_key, getmypid(), 10);
         return true;

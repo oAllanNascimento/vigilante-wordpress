@@ -2,7 +2,7 @@
 /**
  * Vigilante_Monitor
  *
- * Monitoramento de eventos de segurança — usuários, plugins, temas, logins.
+ * Monitoramento de eventos de segurança, usuários, plugins, temas, logins.
  */
 
 if (!defined('ABSPATH')) exit;
@@ -51,7 +51,7 @@ class Vigilante_Monitor {
         if (!$user) return;
 
         $roles = implode(', ', $user->roles);
-        $msg = "Novo usuário criado: {$user->user_login} ({$user->user_email}) — Perfil: {$roles}";
+        $msg = "Novo usuário criado: {$user->user_login} ({$user->user_email}), Perfil: {$roles}";
 
         $is_admin = in_array('administrator', $user->roles);
         $should_alert = $is_admin && self::is_alert_enabled('alert_new_admin');
@@ -63,7 +63,7 @@ class Vigilante_Monitor {
         if (!$user) return;
 
         $old = implode(', ', $old_roles);
-        $msg = "Perfil alterado: {$user->user_login} — de [{$old}] para [{$new_role}]";
+        $msg = "Perfil alterado: {$user->user_login}, de [{$old}] para [{$new_role}]";
 
         $should_alert = $new_role === 'administrator' && self::is_alert_enabled('alert_new_admin');
         self::log_and_alert('perfil_alterado', $msg, $should_alert);

@@ -32,7 +32,7 @@ class Vigilante_Email {
     public static function configure_smtp($phpmailer) {
         $settings = get_option('vigilante_settings', []);
 
-        // Não habilitado pelo usuário — não faz nada
+        // Não habilitado pelo usuário, não faz nada
         if (empty($settings['smtp_enabled']) || empty($settings['smtp_host'])) {
             return;
         }
@@ -191,7 +191,7 @@ class Vigilante_Email {
         $ip    = Vigilante_Logger::get_ip();
         $time  = current_time('d/m/Y H:i:s');
 
-        $subject = "[ALERTA] {$site} — {$type}";
+        $subject = "[ALERTA] {$site}: {$type}";
 
         $body  = "══════════════════════════════════════\n";
         $body .= "  ALERTA DE SEGURANÇA\n";
@@ -213,7 +213,13 @@ class Vigilante_Email {
         $settings = get_option('vigilante_settings', []);
         $email = $settings['email'] ?? get_option('admin_email');
         $site  = get_bloginfo('name');
-        $logs  = Vigilante_Logger::get_recent_logs(24);
+
+        $is_weekly = ($settings['report_frequency'] ?? 'daily') === 'weekly';
+        $hours     = $is_weekly ? 168 : 24;
+        $label     = $is_weekly ? 'SEMANAL' : 'DIÁRIO';
+        $periodo   = $is_weekly ? 'Últimos 7 dias' : 'Últimas 24 horas';
+
+        $logs  = Vigilante_Logger::get_recent_logs($hours);
 
         $admin_count = count(get_users(['role' => 'administrator']));
 
@@ -223,18 +229,18 @@ class Vigilante_Email {
             $counts[$log['type']] = ($counts[$log['type']] ?? 0) + 1;
         }
 
-        $subject = "[Relatório Diário] {$site} — Segurança";
+        $subject = "[Relatório {$label}] {$site}: Segurança";
 
         $body  = "══════════════════════════════════════\n";
-        $body .= "  RELATÓRIO DIÁRIO DE SEGURANÇA\n";
+        $body .= "  RELATÓRIO {$label} DE SEGURANÇA\n";
         $body .= "══════════════════════════════════════\n\n";
         $body .= "Site:       {$site}\n";
-        $body .= "Período:    Últimas 24 horas\n";
+        $body .= "Período:    {$periodo}\n";
         $body .= "Data:       " . current_time('d/m/Y H:i') . "\n";
         $body .= "Admins:     {$admin_count}\n\n";
 
         if (empty($logs)) {
-            $body .= "Nenhuma atividade registrada nas últimas 24 horas.\n";
+            $body .= "Nenhuma atividade registrada (" . strtolower($periodo) . ").\n";
         } else {
             $type_labels = [
                 'usuario_criado'     => 'Usuários criados',
@@ -268,7 +274,7 @@ class Vigilante_Email {
         $admins = get_users(['role' => 'administrator']);
         foreach ($admins as $admin) {
             $since = date('d/m/Y', strtotime($admin->user_registered));
-            $body .= "  • {$admin->user_login} ({$admin->user_email}) — desde {$since}\n";
+            $body .= "  • {$admin->user_login} ({$admin->user_email}), desde {$since}\n";
         }
 
         return self::send($email, $subject, $body);
@@ -283,7 +289,7 @@ class Vigilante_Email {
         $site  = get_bloginfo('name');
         $time  = current_time('d/m/Y H:i:s');
 
-        $subject = "[TESTE] Vigilante de WordPress — {$site}";
+        $subject = "[TESTE] Vigilante de WordPress: {$site}";
 
         $body  = "TESTE DE ENVIO DE E-MAIL\n\n";
         $body .= "Site:          {$site}\n";
@@ -347,7 +353,7 @@ class Vigilante_Email {
             return 'PHP mail() nativa (pode não funcionar em todos os hosts)';
         }
 
-        return 'Nenhum método detectado — emails provavelmente NÃO serão enviados';
+        return 'Nenhum método detectado: emails provavelmente NÃO serão enviados';
     }
 
     /**

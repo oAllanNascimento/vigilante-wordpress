@@ -2,7 +2,7 @@
 /**
  * Vigilante_File_Scanner
  *
- * Monitoramento de integridade de arquivos — snapshots e detecção de alterações.
+ * Monitoramento de integridade de arquivos, snapshots e detecção de alterações.
  */
 
 if (!defined('ABSPATH')) exit;
@@ -34,7 +34,7 @@ class Vigilante_File_Scanner {
             WP_CONTENT_DIR . '/themes/'    => 2,
         ];
 
-        // uploads é vetor comum de ataque — monitorar com profundidade
+        // uploads é vetor comum de ataque, monitorar com profundidade
         $upload_dir = wp_upload_dir();
         if (!empty($upload_dir['basedir'])) {
             $dirs[$upload_dir['basedir'] . '/'] = 3;

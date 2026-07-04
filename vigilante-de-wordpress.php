@@ -1,13 +1,13 @@
 <?php
 /**
  * Plugin Name: Vigilante de WordPress
- * Description: Monitor de segurança — usuários, arquivos, logins, plugins — com SMTP integrado, relatórios por e-mail e diagnóstico.
- * Version: 0.1.2-beta
+ * Description: Monitor de segurança do WordPress (usuários, arquivos, logins, plugins) com SMTP integrado, relatórios por e-mail e diagnóstico.
+ * Version: 1.0.0
  * Author: Allan Nascimento
  * Author URI: mailto:nascimento.allang@gmail.com
- * Text Domain: vigilante-wp
+ * Text Domain: vigilante-de-wordpress
  * Requires at least: 5.6
- * Requires PHP: 7.4
+ * Requires PHP: 8.0
  */
 
 if (!defined('ABSPATH')) exit;
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) exit;
 // Constantes do plugin
 define('VIGILANTE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('VIGILANTE_PLUGIN_FILE', __FILE__);
-define('VIGILANTE_VERSION', '0.1.2-beta');
+define('VIGILANTE_VERSION', '1.0.0');
 
 // Carregar classes
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-logger.php';
@@ -23,7 +23,6 @@ require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-email.php';
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-file-scanner.php';
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-monitor.php';
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-admin.php';
-require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-updater.php';
 
 /**
  * Inicialização do plugin.
@@ -34,7 +33,6 @@ function vigilante_init() {
 
     if (is_admin()) {
         Vigilante_Admin::init();
-        Vigilante_Updater::init();
     }
 }
 add_action('plugins_loaded', 'vigilante_init');
@@ -72,6 +70,17 @@ add_action('vigilante_hourly_file_check', function () {
 });
 
 /**
+ * (Re)agenda o relatório periódico conforme a frequência escolhida.
+ *
+ * @param string $frequency 'daily' ou 'weekly'.
+ */
+function vigilante_schedule_report($frequency = 'daily') {
+    $recurrence = ($frequency === 'weekly') ? 'weekly' : 'daily';
+    wp_clear_scheduled_hook('vigilante_daily_report');
+    wp_schedule_event(time() + HOUR_IN_SECONDS, $recurrence, 'vigilante_daily_report');
+}
+
+/**
  * Ativação do plugin.
  */
 function vigilante_activate() {
@@ -83,6 +92,7 @@ function vigilante_activate() {
             'alert_file_changes' => true,
             'alert_login_failed' => true,
             'max_failed_logins'  => 5,
+            'report_frequency'   => 'daily',
         ]);
     }
 
@@ -95,9 +105,9 @@ function vigilante_activate() {
     Vigilante_File_Scanner::take_snapshot();
 
     // Agendar crons
-    if (!wp_next_scheduled('vigilante_daily_report')) {
-        wp_schedule_event(time(), 'daily', 'vigilante_daily_report');
-    }
+    $settings = get_option('vigilante_settings', []);
+    vigilante_schedule_report($settings['report_frequency'] ?? 'daily');
+
     if (!wp_next_scheduled('vigilante_hourly_file_check')) {
         wp_schedule_event(time(), 'hourly', 'vigilante_hourly_file_check');
     }

@@ -8,11 +8,10 @@
 if (!defined('ABSPATH')) exit;
 ?>
 <div class="wrap vigilante-wrap">
-    <h1>Vigilante de WordPress <span style="font-size: 12px; background: #d63638; color: #fff; padding: 2px 8px; border-radius: 3px; vertical-align: middle;">BETA</span></h1>
+    <h1>Vigilante de WordPress</h1>
 
     <div style="background: #f0f6fc; border-left: 4px solid #2271b1; padding: 10px 14px; margin: 10px 0 16px;">
-        Este plugin está em <strong>fase Beta</strong>.
-        Para dúvidas, sugestões ou reportar problemas, entre em contato:
+        Monitor de segurança do seu WordPress. Para dúvidas ou suporte, entre em contato:
         <strong><a href="mailto:nascimento.allang@gmail.com">nascimento.allang@gmail.com</a></strong>
     </div>
 
@@ -64,6 +63,17 @@ if (!defined('ABSPATH')) exit;
                                value="<?php echo intval($settings['max_failed_logins'] ?? 5); ?>"
                                min="3" max="50" style="width: 70px;" />
                         <span>tentativas por hora para disparar alerta</span>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Frequência do relatório</th>
+                    <td>
+                        <?php $freq = $settings['report_frequency'] ?? 'daily'; ?>
+                        <select name="vigilante_report_frequency">
+                            <option value="daily" <?php selected($freq, 'daily'); ?>>Diário</option>
+                            <option value="weekly" <?php selected($freq, 'weekly'); ?>>Semanal</option>
+                        </select>
+                        <p class="description">Resumo periódico das atividades. Os alertas imediatos acima são enviados na hora, independente desta opção.</p>
                     </td>
                 </tr>
             </table>
@@ -274,7 +284,7 @@ if (!defined('ABSPATH')) exit;
 
                 <dt>PHP mail() disponível</dt>
                 <dd class="<?php echo $diag['php_mail'] ? 'vigilante-status-ok' : 'vigilante-status-fail'; ?>">
-                    <?php echo $diag['php_mail'] ? 'Sim' : 'Não — a função mail() está desabilitada neste servidor'; ?>
+                    <?php echo $diag['php_mail'] ? 'Sim' : 'Não: a função mail() está desabilitada neste servidor'; ?>
                 </dd>
 
                 <dt>SMTP ativo</dt>
@@ -288,7 +298,7 @@ if (!defined('ABSPATH')) exit;
                         <?php if ($own_smtp && !empty($external_smtp)): ?>
                             <br><small><strong>Nota:</strong> O SMTP do Vigilante está habilitado, mas foi detectado um plugin SMTP externo
                             (<strong><?php echo esc_html(implode(', ', $external_smtp)); ?></strong>).
-                            O plugin externo terá prioridade — o Vigilante não irá interferir na configuração existente.</small>
+                            O plugin externo terá prioridade, o Vigilante não irá interferir na configuração existente.</small>
                         <?php endif; ?>
                     <?php else: ?>
                         <span class="vigilante-status-warn">Nenhum SMTP configurado</span>
@@ -341,14 +351,14 @@ if (!defined('ABSPATH')) exit;
             <h3>&#128218; Guia de Configuração de E-mail</h3>
             <p>Siga este passo a passo para que o Vigilante consiga enviar e-mails de alerta.</p>
 
-            <h4>Passo 1 — Ativar o SMTP</h4>
+            <h4>Passo 1: Ativar o SMTP</h4>
             <ol>
                 <li>Vá na aba <strong>Configurações</strong> desta página</li>
                 <li>Na seção <strong>Configuração SMTP</strong>, marque <strong>"Ativar SMTP"</strong></li>
                 <li>Os campos de configuração aparecerão automaticamente</li>
             </ol>
 
-            <h4>Passo 2 — Preencher os dados do seu provedor</h4>
+            <h4>Passo 2: Preencher os dados do seu provedor</h4>
             <p>Escolha abaixo o provedor de e-mail que você usa e preencha os campos correspondentes:</p>
 
             <div class="guia-provedor">
@@ -395,7 +405,7 @@ if (!defined('ABSPATH')) exit;
                 <em>"Quais são os dados SMTP para enviar e-mails pelo meu domínio?"</em></p>
             </div>
 
-            <h4>Passo 3 — Salvar e testar</h4>
+            <h4>Passo 3: Salvar e testar</h4>
             <ol>
                 <li>Clique em <strong>Salvar Configurações</strong></li>
                 <li>Clique em <strong>Testar E-mail</strong></li>
