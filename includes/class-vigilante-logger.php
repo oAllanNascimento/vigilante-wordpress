@@ -17,11 +17,15 @@ class Vigilante_Logger {
     /**
      * Adquire um lock via transient para operações atômicas.
      *
+     * Público desde 1.1.0 porque a Vigilante_Caixa grava na mesma condição de
+     * corrida (dois alertas críticos no mesmo segundo, que é o cenário de ataque),
+     * e duplicar o lock renderia duas implementações para o mesmo problema.
+     *
      * @param string $name Nome do lock.
      * @param int    $timeout Tempo máximo de espera em segundos.
      * @return bool Se o lock foi adquirido.
      */
-    private static function acquire_lock($name, $timeout = 5) {
+    public static function acquire_lock($name, $timeout = 5) {
         $lock_key = 'vigilante_lock_' . $name;
         $start = time();
 
@@ -42,7 +46,7 @@ class Vigilante_Logger {
     /**
      * Libera um lock.
      */
-    private static function release_lock($name) {
+    public static function release_lock($name) {
         delete_transient('vigilante_lock_' . $name);
     }
 

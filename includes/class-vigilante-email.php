@@ -185,6 +185,13 @@ class Vigilante_Email {
      * Envia alerta crítico imediato.
      */
     public static function send_critical_alert($type, $message) {
+        // Deposita ANTES de tentar o e-mail, e de propósito: é aqui que passa todo
+        // alerta crítico do plugin, então tipo de alerta criado no futuro ganha a
+        // segunda via sem ninguém precisar lembrar. E se o envio estourar (SMTP
+        // bloqueado, credencial errada, site invadido apontando o alerta para outro
+        // endereço), o aviso já está guardado para quem vem buscar de fora.
+        Vigilante_Caixa::registrar($type, $message);
+
         $settings = get_option('vigilante_settings', []);
         $email = $settings['email'] ?? get_option('admin_email');
         $site  = get_bloginfo('name');

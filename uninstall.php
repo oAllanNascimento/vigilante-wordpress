@@ -21,6 +21,7 @@ function vigilante_uninstall_cleanup() {
         'vigilante_security_log',
         'vigilante_email_log',
         'vigilante_file_snapshot',
+        'vigilante_caixa',
         'vigilante_crypto_key',
         // Opções legadas da versão em arquivo único.
         'osb_security_log',
@@ -34,6 +35,7 @@ function vigilante_uninstall_cleanup() {
     // Transients (cache e locks).
     delete_transient('vigilante_lock_security_log');
     delete_transient('vigilante_lock_email_log');
+    delete_transient('vigilante_lock_caixa');
     delete_transient('vigilante_github_update');
 
     // Tarefas agendadas.
