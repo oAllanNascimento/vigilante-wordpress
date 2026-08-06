@@ -244,7 +244,18 @@ class Vigilante_Email {
         $body .= "Site:       {$site}\n";
         $body .= "Período:    {$periodo}\n";
         $body .= "Data:       " . current_time('d/m/Y H:i') . "\n";
-        $body .= "Admins:     {$admin_count}\n\n";
+        $body .= "Admins:     {$admin_count}\n";
+
+        // Caminho ignorado é ponto cego: aparece em todo relatório, senão vira
+        // exclusão esquecida que ninguém lembra de ter configurado.
+        $exclusoes = class_exists('Vigilante_File_Scanner') ? Vigilante_File_Scanner::get_exclusoes() : [];
+        if ($exclusoes) {
+            $body .= "\nCaminhos IGNORADOS na vigilância de arquivos (" . count($exclusoes) . "):\n";
+            foreach ($exclusoes as $e) {
+                $body .= "  - {$e}\n";
+            }
+        }
+        $body .= "\n";
 
         if (empty($logs)) {
             $body .= "Nenhuma atividade registrada (" . strtolower($periodo) . ").\n";

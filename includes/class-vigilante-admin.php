@@ -113,6 +113,10 @@ class Vigilante_Admin {
                 'alert_login_failed' => isset($_POST['vigilante_alert_login']),
                 'max_failed_logins'  => max(3, min(50, intval($_POST['vigilante_max_failed'] ?? 5))),
                 'report_frequency'   => in_array($_POST['vigilante_report_frequency'] ?? '', ['daily', 'weekly'], true) ? $_POST['vigilante_report_frequency'] : 'daily',
+                // Caminhos ignorados na vigilância de arquivos, um por linha.
+                // sanitize_textarea_field preserva as quebras de linha; o parse e a
+                // trava contra ".." ficam no Vigilante_File_Scanner::get_exclusoes().
+                'file_exclusions'    => sanitize_textarea_field($_POST['vigilante_file_exclusions'] ?? ''),
                 // SMTP
                 'smtp_enabled'       => isset($_POST['vigilante_smtp_enabled']),
                 'smtp_host'          => sanitize_text_field($_POST['vigilante_smtp_host'] ?? ''),
@@ -170,6 +174,10 @@ class Vigilante_Admin {
 
         if (isset($_POST['vigilante_reset_snapshot']) && self::verify_nonce('settings')) {
             Vigilante_File_Scanner::take_snapshot();
+            // Zera junto o estado de repetição: linha de base nova significa
+            // "aceitei o que está aí", então o próximo achado tem que alertar,
+            // mesmo que seja o mesmo caminho silenciado antes.
+            delete_option(Vigilante_File_Scanner::REPETICAO_OPTION);
             self::notice('Snapshot dos arquivos atualizado.');
         }
 

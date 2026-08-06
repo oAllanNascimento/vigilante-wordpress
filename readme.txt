@@ -4,7 +4,7 @@ Tags: seguranca, security, monitoramento, alertas, malware
 Requires at least: 5.6
 Tested up to: 6.5
 Requires PHP: 8.0
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,13 @@ Não. O plugin exige PHP 8.0 ou superior.
 Não. Ao remover o plugin, todas as opções, registros e tarefas agendadas são apagadas.
 
 == Changelog ==
+
+= 1.2.0 =
+* O relatório periódico passa a ser SEMANAL, inclusive em quem já tinha o plugin (migração de uma vez só, por versão). O que é urgente continua saindo na hora, como alerta próprio.
+* Achado repetido de arquivo não gera e-mail novo dentro de 24 horas. Ele continua no log e aparece resumido no próximo alerta, com a contagem de vezes.
+* Lista de caminhos ignorados na vigilância de arquivos, configurável no painel, com curinga. Cada caminho ignorado aparece no relatório periódico, pra não virar ponto cego esquecido.
+* Atualizar o snapshot pelo painel também zera o estado de repetição.
+* Motivo das duas mudanças: no Hospital da Plástica, o All-in-One WP Migration apagava e recriava o próprio `storage/.htaccess` uma vez por dia, e o Vigilante alertava certo, todo dia, por semanas. Monitor que repete achado conhecido treina quem lê a ignorar o canal.
 
 = 1.0.0 =
 * Primeira versão estável.

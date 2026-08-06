@@ -57,6 +57,21 @@ if (!defined('ABSPATH')) exit;
                     </td>
                 </tr>
                 <tr>
+                    <th>Caminhos ignorados</th>
+                    <td>
+                        <textarea name="vigilante_file_exclusions" rows="4" style="width: 100%; max-width: 560px; font-family: monospace;"
+                                  placeholder="wp-content/plugins/all-in-one-wp-migration/storage"><?php
+                            echo esc_textarea($settings['file_exclusions'] ?? '');
+                        ?></textarea>
+                        <p class="description">
+                            Um caminho por linha, a partir da raiz do site, com <code>*</code> aceito como curinga.
+                            Diretório ignorado leva junto o que está dentro.
+                            Use só quando um plugin mexer na própria pasta sozinho e gerar alerta verdadeiro todo dia.
+                            <strong>Cada linha aqui é um ponto cego</strong>, então mantenha a lista curta e específica.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
                     <th>Limite brute force</th>
                     <td>
                         <input type="number" name="vigilante_max_failed"

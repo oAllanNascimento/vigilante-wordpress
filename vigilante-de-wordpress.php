@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vigilante de WordPress
  * Description: Monitor de segurança do WordPress (usuários, arquivos, logins, plugins) com SMTP integrado, relatórios por e-mail e diagnóstico.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Allan Nascimento
  * Author URI: mailto:nascimento.allang@gmail.com
  * Text Domain: vigilante-de-wordpress
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) exit;
 // Constantes do plugin
 define('VIGILANTE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('VIGILANTE_PLUGIN_FILE', __FILE__);
-define('VIGILANTE_VERSION', '1.1.0');
+define('VIGILANTE_VERSION', '1.2.0');
 
 // Carregar classes
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-logger.php';
@@ -53,22 +53,37 @@ add_action('vigilante_daily_report', function () {
 add_action('vigilante_hourly_file_check', function () {
     $changes = Vigilante_File_Scanner::check_changes();
 
-    if (!empty($changes)) {
-        $lines = array_map(
-            fn($c) => "{$c['action']}: {$c['path']}",
-            array_slice($changes, 0, 50)
+    if (empty($changes)) {
+        return;
+    }
+
+    // Achado repetido dentro da janela não vira e-mail de novo, mas continua no
+    // log. Sem isso, um arquivo que legitimamente some e volta todo dia gera um
+    // alerta por dia pra sempre, e o canal vira ruído que ninguém abre.
+    list($novos, $repetidos) = Vigilante_File_Scanner::separa_repetidos($changes);
+
+    $linhas = array_map(
+        fn($c) => "{$c['action']}: {$c['path']}",
+        array_slice($novos, 0, 50)
+    );
+
+    $msg = count($novos) . " alteração(ões) detectada(s) nos arquivos:\n" . implode("\n", $linhas);
+
+    if (!empty($repetidos)) {
+        $rep = array_map(
+            fn($c) => "{$c['action']}: {$c['path']} (" . ($c['vezes'] ?? 2) . "ª vez em 24h)",
+            array_slice($repetidos, 0, 20)
         );
-        $count = count($changes);
-        $msg = "{$count} alteração(ões) detectada(s) nos arquivos:\n" . implode("\n", $lines);
+        $msg .= "\n\nRepetidos, já avisados nas últimas 24h (sem e-mail novo):\n" . implode("\n", $rep);
+    }
 
-        $settings = get_option('vigilante_settings', []);
-        $should_alert = !empty($settings['alert_file_changes']);
+    $settings     = get_option('vigilante_settings', []);
+    $should_alert = !empty($settings['alert_file_changes']) && !empty($novos);
 
-        Vigilante_Logger::log_event('arquivo_alterado', $msg, $should_alert);
+    Vigilante_Logger::log_event('arquivo_alterado', $msg, $should_alert);
 
-        if ($should_alert) {
-            Vigilante_Email::send_critical_alert('arquivo_alterado', $msg);
-        }
+    if ($should_alert) {
+        Vigilante_Email::send_critical_alert('arquivo_alterado', $msg);
     }
 });
 
@@ -87,7 +102,9 @@ function vigilante_schedule_report($frequency = 'daily') {
  * Ativação do plugin.
  */
 function vigilante_activate() {
-    // Configurações padrão
+    // Configurações padrão.
+    // O relatório periódico nasce SEMANAL: o que é urgente já sai na hora, como
+    // alerta próprio, e um resumo por dia só treina quem lê a arquivar sem abrir.
     if (!get_option('vigilante_settings')) {
         update_option('vigilante_settings', [
             'email'              => get_option('admin_email'),
@@ -95,7 +112,7 @@ function vigilante_activate() {
             'alert_file_changes' => true,
             'alert_login_failed' => true,
             'max_failed_logins'  => 5,
-            'report_frequency'   => 'daily',
+            'report_frequency'   => 'weekly',
         ]);
     }
 
@@ -150,6 +167,19 @@ function vigilante_maybe_migrate() {
     if ($old_snapshot !== false && get_option(Vigilante_File_Scanner::SNAPSHOT_OPTION) === false) {
         update_option(Vigilante_File_Scanner::SNAPSHOT_OPTION, $old_snapshot, false);
         delete_option('osb_file_snapshot');
+    }
+
+    // 1.2.0: o relatório passa a ser semanal em quem já estava instalado, e não
+    // só em instalação nova. Roda uma vez por site, marcada por versão, então
+    // quem escolher diário de novo no painel depois disso não é desfeito.
+    if (get_option('vigilante_migracao_versao') !== VIGILANTE_VERSION) {
+        $settings = get_option('vigilante_settings', []);
+        if (($settings['report_frequency'] ?? 'daily') === 'daily') {
+            $settings['report_frequency'] = 'weekly';
+            update_option('vigilante_settings', $settings);
+            vigilante_schedule_report('weekly');
+        }
+        update_option('vigilante_migracao_versao', VIGILANTE_VERSION);
     }
 }
 add_action('admin_init', 'vigilante_maybe_migrate');
