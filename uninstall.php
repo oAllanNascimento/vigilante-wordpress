@@ -21,6 +21,8 @@ function vigilante_uninstall_cleanup() {
         'vigilante_security_log',
         'vigilante_email_log',
         'vigilante_file_snapshot',
+        'vigilante_file_alert_state',
+        'vigilante_migrou_semanal',
         'vigilante_caixa',
         'vigilante_crypto_key',
         // Opções legadas da versão em arquivo único.

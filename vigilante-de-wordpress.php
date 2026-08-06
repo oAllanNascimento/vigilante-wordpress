@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vigilante de WordPress
  * Description: Monitor de segurança do WordPress (usuários, arquivos, logins, plugins) com SMTP integrado, relatórios por e-mail e diagnóstico.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: Allan Nascimento
  * Author URI: mailto:nascimento.allang@gmail.com
  * Text Domain: vigilante-de-wordpress
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) exit;
 // Constantes do plugin
 define('VIGILANTE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('VIGILANTE_PLUGIN_FILE', __FILE__);
-define('VIGILANTE_VERSION', '1.2.0');
+define('VIGILANTE_VERSION', '1.2.1');
 
 // Carregar classes
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-logger.php';
@@ -170,16 +170,24 @@ function vigilante_maybe_migrate() {
     }
 
     // 1.2.0: o relatório passa a ser semanal em quem já estava instalado, e não
-    // só em instalação nova. Roda uma vez por site, marcada por versão, então
-    // quem escolher diário de novo no painel depois disso não é desfeito.
-    if (get_option('vigilante_migracao_versao') !== VIGILANTE_VERSION) {
+    // só em instalação nova.
+    //
+    // A marca é uma opção PRÓPRIA, e não a versão do plugin: marcada por versão,
+    // a troca voltaria a acontecer a cada atualização e desfaria, calada, a
+    // escolha de quem preferiu diário no painel. Migração de uma vez é de uma
+    // vez pra sempre.
+    if (!get_option('vigilante_migrou_semanal')) {
         $settings = get_option('vigilante_settings', []);
         if (($settings['report_frequency'] ?? 'daily') === 'daily') {
             $settings['report_frequency'] = 'weekly';
             update_option('vigilante_settings', $settings);
             vigilante_schedule_report('weekly');
         }
-        update_option('vigilante_migracao_versao', VIGILANTE_VERSION);
+        update_option('vigilante_migrou_semanal', 1);
     }
 }
-add_action('admin_init', 'vigilante_maybe_migrate');
+// 'init' e não 'admin_init': a migração de 1.2.0 muda o agendamento do relatório,
+// e site que ninguém abre no painel (o caso comum nos que a gente só monitora)
+// ficaria na configuração antiga pra sempre. No 'init' ela pega qualquer request,
+// inclusive o do cron, e custa uma leitura de option já autoloaded.
+add_action('init', 'vigilante_maybe_migrate');

@@ -4,7 +4,7 @@ Tags: seguranca, security, monitoramento, alertas, malware
 Requires at least: 5.6
 Tested up to: 6.5
 Requires PHP: 8.0
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,9 @@ Não. O plugin exige PHP 8.0 ou superior.
 Não. Ao remover o plugin, todas as opções, registros e tarefas agendadas são apagadas.
 
 == Changelog ==
+
+= 1.2.1 =
+* A migração para relatório semanal passa a rodar no `init`, e não só no painel: site que ninguém abre no wp-admin continuaria mandando relatório diário para sempre.
 
 = 1.2.0 =
 * O relatório periódico passa a ser SEMANAL, inclusive em quem já tinha o plugin (migração de uma vez só, por versão). O que é urgente continua saindo na hora, como alerta próprio.

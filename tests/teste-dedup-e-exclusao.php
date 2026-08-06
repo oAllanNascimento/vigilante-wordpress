@@ -15,7 +15,12 @@ function update_option($k, $v, $a = null) { $GLOBALS['opts'][$k] = $v; return tr
 function delete_option($k) { unset($GLOBALS['opts'][$k]); return true; }
 function wp_upload_dir() { return array('basedir' => ABSPATH . 'wp-content/uploads'); }
 
-require_once __DIR__ . '/class-vigilante-file-scanner.php';
+// Roda do repo (../includes) ou com a classe copiada ao lado, que e como se
+// testa uma versao antiga: basta por o arquivo dela nesta pasta.
+$classe = file_exists(__DIR__ . '/class-vigilante-file-scanner.php')
+    ? __DIR__ . '/class-vigilante-file-scanner.php'
+    : __DIR__ . '/../includes/class-vigilante-file-scanner.php';
+require_once $classe;
 
 $falhas = 0;
 function checa($nome, $ok) {
