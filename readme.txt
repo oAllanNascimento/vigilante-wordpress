@@ -4,7 +4,7 @@ Tags: seguranca, security, monitoramento, alertas, malware
 Requires at least: 5.6
 Tested up to: 6.5
 Requires PHP: 8.0
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,13 @@ Não. O plugin exige PHP 8.0 ou superior.
 Não. Ao remover o plugin, todas as opções, registros e tarefas agendadas são apagadas.
 
 == Changelog ==
+
+= 1.4.0 =
+* Arquivo executável (php, phtml, phar, inc, shtml) e .htaccess passam a ser vigiados em **qualquer profundidade**, em vez de parar dois níveis abaixo de cada pasta monitorada. A varredura antiga não via um backdoor guardado dentro de `assets/js/` de um plugin, que é onde ele costuma ficar. Num site real isso significou passar de 3.137 para 22.395 arquivos vigiados.
+* Passam a ser varridos também o resto de `wp-content` (cache, languages, upgrade) e as pastas soltas na raiz do site, que nunca foram olhadas.
+* Limite de profundidade continua valendo para o que não executa (js e afins), que é o que segura o custo.
+* Na primeira verificação depois da atualização, a linha de base é refeita em silêncio: os milhares de arquivos que a versão anterior não enxergava não são "novos", e alertar sobre eles seria enterrar o achado de verdade.
+* O snapshot guarda só o hash de cada arquivo (tamanho e data eram gravados e nunca lidos), o que deixa a verificação mais leve mesmo vigiando sete vezes mais arquivo.
 
 = 1.3.0 =
 * Nova opção "Alerta imediato por e-mail" (ligada por padrão). Desligada, o alerta crítico continua indo para a caixa de saída, para o log e para o relatório periódico; só o e-mail imediato deixa de sair. Serve para site onde a caixa é recolhida de fora e o aviso já chega por outro canal, onde o e-mail do mesmo evento era duplicata.

@@ -12,6 +12,18 @@ class Vigilante_File_Scanner {
     const SNAPSHOT_OPTION = 'vigilante_file_snapshot';
 
     /**
+     * Alcance da varredura que gerou a linha de base guardada.
+     *
+     * Quando o alcance muda, todo arquivo que a versão anterior não enxergava
+     * apareceria como NOVO de uma vez (na Belavista foram mais de 19 mil). Isso
+     * não é achado, é a régua tendo mudado: a linha de base se refaz calada e o
+     * alerta volta a valer na rodada seguinte. Trocar esta constante é o jeito
+     * de dizer "o que se vigia mudou".
+     */
+    const ESCOPO_OPTION = 'vigilante_snapshot_escopo';
+    const ESCOPO_ATUAL  = 'executavel-em-qualquer-profundidade-v1';
+
+    /**
      * Estado de repetição: caminho => ['ultimo' => timestamp, 'vezes' => n].
      * Serve pra não repetir o mesmo achado num alerta por dia (ver separa_repetidos()).
      */
@@ -35,11 +47,37 @@ class Vigilante_File_Scanner {
     private const DANGEROUS_IN_UPLOADS = '/\.(php|php[345678]?|phtml|phar|inc|shtml)$/i';
 
     /**
-     * Diretórios monitorados com profundidade máxima de scan.
+     * Extensões acompanhadas em QUALQUER profundidade: o que o servidor executa,
+     * mais o .htaccess, que decide o que é executado.
+     *
+     * Incidente de 05/08/2026 na Faculdade Belavista: o backdoor estava em
+     * wp-content/plugins/customizacao-belavista/assets/js/settings-functions.php,
+     * três pastas abaixo da raiz do plugin, e a varredura parava na segunda.
+     * Ficou invisível por dois dias, com 18.806 arquivos PHP daquele site fora do
+     * alcance do scanner. Limite de profundidade continua valendo pro resto (js e
+     * afins, que são muitos e servem de contexto), nunca pro que executa.
+     */
+    private const SEMPRE_VIGIADO = '/\.(php|php[345678]?|phtml|phar|inc|shtml|htaccess)$/i';
+
+    /**
+     * Trava de segurança da recursão: nenhuma árvore legítima de WordPress chega
+     * perto disso, e ela impede que estrutura patológica (ou link simbólico que
+     * escapou da checagem) faça a varredura horária rodar sem fim.
+     */
+    private const PROFUNDIDADE_LIMITE = 16;
+
+    /**
+     * Diretórios monitorados com a profundidade até a qual se monitora TODA
+     * extensão da lista. Abaixo dela a varredura continua, só que restrita ao
+     * que é executável (ver SEMPRE_VIGIADO).
+     *
+     * A ordem importa: os diretórios específicos vêm primeiro e a raiz vem por
+     * último, porque uma pasta já varrida não se varre de novo. Assim a raiz
+     * pega o que sobrou (pasta solta de backup, staging, painel de terceiro) sem
+     * refazer o trabalho de wp-admin, wp-includes e wp-content.
      */
     private static function get_monitored_dirs() {
         $dirs = [
-            ABSPATH                        => 0,  // raiz: só nivel 0 (arquivos soltos)
             ABSPATH . 'wp-admin/'          => 2,
             ABSPATH . 'wp-includes/'       => 2,
             WP_CONTENT_DIR . '/plugins/'   => 2,
@@ -52,6 +90,14 @@ class Vigilante_File_Scanner {
         if (!empty($upload_dir['basedir'])) {
             $dirs[$upload_dir['basedir'] . '/'] = 3;
         }
+
+        // o resto de wp-content (cache, languages, upgrade, pastas de plugin
+        // fora do padrão) nunca foi varrido, e é onde implante gosta de morar
+        $dirs[WP_CONTENT_DIR . '/'] = 1;
+
+        // raiz por último: arquivos soltos com toda extensão, e daí pra baixo
+        // só executável, no que ainda não foi visitado acima
+        $dirs[ABSPATH] = 0;
 
         return $dirs;
     }
@@ -147,14 +193,40 @@ class Vigilante_File_Scanner {
      * Cria um snapshot do estado atual dos arquivos.
      */
     public static function take_snapshot() {
-        $snapshot = [];
+        $snapshot = self::varre_tudo();
+
+        update_option(self::SNAPSHOT_OPTION, $snapshot, false);
+        update_option(self::ESCOPO_OPTION, self::ESCOPO_ATUAL, false);
+        return $snapshot;
+    }
+
+    /**
+     * Hash de uma entrada do snapshot, no formato novo (string) ou no antigo
+     * (array com size/modified/hash). Linha de base velha não deveria chegar
+     * aqui, porque a marca de alcance a refaz antes, mas comparar formato
+     * diferente sem checar acusaria o site inteiro como modificado.
+     */
+    private static function hash_de($entrada) {
+        return is_array($entrada) ? ($entrada['hash'] ?? '') : (string) $entrada;
+    }
+
+    /**
+     * Uma passada completa por todos os diretórios monitorados.
+     *
+     * A lista de exclusões e o conjunto de diretórios já visitados são
+     * calculados uma vez por passada e atravessam a recursão inteira: sem isso,
+     * a raiz varreria de novo tudo que os diretórios específicos já cobriram.
+     */
+    private static function varre_tudo() {
+        $snapshot  = [];
+        $exclusoes = self::get_exclusoes();
+        $visitados = [];
 
         foreach (self::get_monitored_dirs() as $dir => $max_depth) {
             if (!is_dir($dir)) continue;
-            self::scan_directory($dir, $snapshot, 0, $max_depth);
+            self::scan_directory($dir, $snapshot, 0, $max_depth, $exclusoes, $visitados);
         }
 
-        update_option(self::SNAPSHOT_OPTION, $snapshot, false);
         return $snapshot;
     }
 
@@ -171,11 +243,14 @@ class Vigilante_File_Scanner {
             return null;
         }
 
-        $new_snapshot = [];
-        foreach (self::get_monitored_dirs() as $dir => $max_depth) {
-            if (!is_dir($dir)) continue;
-            self::scan_directory($dir, $new_snapshot, 0, $max_depth);
+        // linha de base feita por uma varredura de alcance menor não se compara
+        // com esta: refaz e volta a alertar na próxima rodada
+        if (get_option(self::ESCOPO_OPTION, '') !== self::ESCOPO_ATUAL) {
+            self::take_snapshot();
+            return null;
         }
+
+        $new_snapshot = self::varre_tudo();
 
         $changes = [];
 
@@ -191,7 +266,7 @@ class Vigilante_File_Scanner {
 
         // Arquivos modificados
         foreach ($new_snapshot as $path => $info) {
-            if (isset($old_snapshot[$path]) && $old_snapshot[$path]['hash'] !== $info['hash']) {
+            if (isset($old_snapshot[$path]) && self::hash_de($old_snapshot[$path]) !== self::hash_de($info)) {
                 $changes[] = [
                     'action' => 'MODIFICADO',
                     'path'   => str_replace(ABSPATH, '', $path),
@@ -217,30 +292,95 @@ class Vigilante_File_Scanner {
 
     /**
      * Verifica se um diretório está dentro de uploads.
+     *
+     * A base de uploads é resolvida uma vez por processo: com a varredura
+     * descendo a árvore inteira, um realpath() por diretório vira milhares de
+     * chamadas ao disco sem mudar resposta nenhuma.
      */
     private static function is_uploads_dir($dir) {
-        $upload_dir = wp_upload_dir();
-        if (empty($upload_dir['basedir'])) return false;
-        return str_starts_with(realpath($dir) ?: $dir, realpath($upload_dir['basedir']) ?: $upload_dir['basedir']);
+        static $bases = null;
+
+        if ($bases === null) {
+            $bases = [];
+            $upload_dir = wp_upload_dir();
+            if (!empty($upload_dir['basedir'])) {
+                $bases[] = rtrim($upload_dir['basedir'], '/');
+                $real = realpath($upload_dir['basedir']);
+                if ($real && !in_array($real, $bases, true)) $bases[] = $real;
+            }
+        }
+
+        if (!$bases) return false;
+
+        $dir = rtrim($dir, '/');
+        foreach ($bases as $base) {
+            if ($dir === $base || str_starts_with($dir, $base . '/')) return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * O caminho canônico está dentro da árvore do site (ou de uploads, que em
+     * algumas instalações mora fora dela)?
+     */
+    private static function dentro_do_site($canonico) {
+        static $raizes = null;
+
+        if ($raizes === null) {
+            $raizes = [rtrim(realpath(ABSPATH) ?: ABSPATH, '/')];
+            $upload_dir = wp_upload_dir();
+            if (!empty($upload_dir['basedir'])) {
+                $base = rtrim(realpath($upload_dir['basedir']) ?: $upload_dir['basedir'], '/');
+                if (!in_array($base, $raizes, true)) $raizes[] = $base;
+            }
+        }
+
+        $canonico = rtrim($canonico, '/');
+        foreach ($raizes as $raiz) {
+            if ($raiz !== '' && ($canonico === $raiz || str_starts_with($canonico, $raiz . '/'))) return true;
+        }
+
+        return false;
     }
 
     /**
      * Escaneia um diretório recursivamente.
      *
      * Em uploads, só monitora extensões perigosas (executáveis server-side).
-     * Nos demais diretórios, monitora todas as extensões configuradas.
+     * Nos demais diretórios, monitora todas as extensões configuradas até
+     * $max_depth, e daí pra baixo continua descendo só atrás de executável
+     * (SEMPRE_VIGIADO). Foi essa parada em $max_depth que escondeu o backdoor da
+     * Belavista em 05/08/2026, três pastas dentro de um plugin.
+     *
+     * @param array $visitados Diretórios já varridos nesta passada, por caminho
+     *                         canônico. Evita trabalho repetido entre as raízes e
+     *                         fecha a porta pra laço de link simbólico.
      */
-    private static function scan_directory($dir, &$snapshot, $depth = 0, $max_depth = 2, $exclusoes = null) {
-        if ($depth > $max_depth) return;
+    private static function scan_directory($dir, &$snapshot, $depth = 0, $max_depth = 2, $exclusoes = null, &$visitados = null) {
+        if ($depth > self::PROFUNDIDADE_LIMITE) return;
         if (!is_readable($dir)) return;
 
         if ($exclusoes === null) $exclusoes = self::get_exclusoes();
+        if ($visitados === null) $visitados = [];
+
+        $canonico = realpath($dir) ?: rtrim($dir, '/');
+        if (isset($visitados[$canonico])) return;
+
+        // link simbólico é seguido, mas nunca pra fora do site: senão um link
+        // apontando pra / faria a varredura horária caminhar o servidor inteiro
+        if ($depth > 0 && !self::dentro_do_site($canonico)) return;
+
+        $visitados[$canonico] = true;
 
         $items = @scandir($dir);
         if (!$items) return;
 
         $in_uploads = self::is_uploads_dir($dir);
         $pattern = $in_uploads ? self::DANGEROUS_IN_UPLOADS : self::MONITORED_EXTENSIONS;
+
+        // passado o limite de profundidade, só o que executa continua vigiado
+        if ($depth > $max_depth) $pattern = self::SEMPRE_VIGIADO;
 
         foreach ($items as $item) {
             if ($item === '.' || $item === '..') continue;
@@ -250,15 +390,14 @@ class Vigilante_File_Scanner {
             if (self::esta_excluido($path, $exclusoes)) continue;
 
             if (is_file($path) && preg_match($pattern, $item)) {
-                $snapshot[$path] = [
-                    'size'     => filesize($path),
-                    'modified' => filemtime($path),
-                    'hash'     => md5_file($path),
-                ];
+                // só o hash: tamanho e data eram guardados e nunca lidos, e com a
+                // varredura enxergando 7x mais arquivo cada campo extra é linha de
+                // wp_options e memória de cron. A comparação sempre foi por hash.
+                $snapshot[$path] = md5_file($path);
             }
 
-            if (is_dir($path) && $depth < $max_depth) {
-                self::scan_directory($path, $snapshot, $depth + 1, $max_depth, $exclusoes);
+            if (is_dir($path)) {
+                self::scan_directory($path, $snapshot, $depth + 1, $max_depth, $exclusoes, $visitados);
             }
         }
     }
