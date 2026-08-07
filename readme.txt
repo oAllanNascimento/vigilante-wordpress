@@ -4,7 +4,7 @@ Tags: seguranca, security, monitoramento, alertas, malware
 Requires at least: 5.6
 Tested up to: 6.5
 Requires PHP: 8.0
-Stable tag: 1.2.1
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,9 @@ Não. O plugin exige PHP 8.0 ou superior.
 Não. Ao remover o plugin, todas as opções, registros e tarefas agendadas são apagadas.
 
 == Changelog ==
+
+= 1.3.0 =
+* Nova opção "Alerta imediato por e-mail" (ligada por padrão). Desligada, o alerta crítico continua indo para a caixa de saída, para o log e para o relatório periódico; só o e-mail imediato deixa de sair. Serve para site onde a caixa é recolhida de fora e o aviso já chega por outro canal, onde o e-mail do mesmo evento era duplicata.
 
 = 1.2.1 =
 * A migração para relatório semanal passa a rodar no `init`, e não só no painel: site que ninguém abre no wp-admin continuaria mandando relatório diário para sempre.

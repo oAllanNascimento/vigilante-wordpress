@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vigilante de WordPress
  * Description: Monitor de segurança do WordPress (usuários, arquivos, logins, plugins) com SMTP integrado, relatórios por e-mail e diagnóstico.
- * Version: 1.2.1
+ * Version: 1.3.0
  * Author: Allan Nascimento
  * Author URI: mailto:nascimento.allang@gmail.com
  * Text Domain: vigilante-de-wordpress
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) exit;
 // Constantes do plugin
 define('VIGILANTE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('VIGILANTE_PLUGIN_FILE', __FILE__);
-define('VIGILANTE_VERSION', '1.2.1');
+define('VIGILANTE_VERSION', '1.3.0');
 
 // Carregar classes
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-logger.php';
@@ -111,6 +111,7 @@ function vigilante_activate() {
             'alert_new_admin'    => true,
             'alert_file_changes' => true,
             'alert_login_failed' => true,
+            'email_critical_alerts' => true,
             'max_failed_logins'  => 5,
             'report_frequency'   => 'weekly',
         ]);

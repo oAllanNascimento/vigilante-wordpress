@@ -111,6 +111,9 @@ class Vigilante_Admin {
                 'alert_new_admin'    => isset($_POST['vigilante_alert_admin']),
                 'alert_file_changes' => isset($_POST['vigilante_alert_files']),
                 'alert_login_failed' => isset($_POST['vigilante_alert_login']),
+                // Canal do alerta imediato: desligado, o evento segue indo pra caixa,
+                // pro log e pro relatório; só o e-mail imediato deixa de sair.
+                'email_critical_alerts' => isset($_POST['vigilante_email_critical_alerts']),
                 'max_failed_logins'  => max(3, min(50, intval($_POST['vigilante_max_failed'] ?? 5))),
                 'report_frequency'   => in_array($_POST['vigilante_report_frequency'] ?? '', ['daily', 'weekly'], true) ? $_POST['vigilante_report_frequency'] : 'daily',
                 // Caminhos ignorados na vigilância de arquivos, um por linha.

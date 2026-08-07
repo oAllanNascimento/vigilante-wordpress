@@ -57,6 +57,22 @@ if (!defined('ABSPATH')) exit;
                     </td>
                 </tr>
                 <tr>
+                    <th>Alerta imediato por e-mail</th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="vigilante_email_critical_alerts"
+                                   <?php checked($settings['email_critical_alerts'] ?? true); ?> />
+                            Enviar os alertas imediatos também por e-mail
+                        </label>
+                        <p class="description">
+                            Desmarque apenas em site onde o alerta imediato já chega por outro canal
+                            (a caixa do Vigilante recolhida de fora, que vira aviso no WhatsApp).
+                            Com isso desmarcado o evento continua no log, na caixa e no relatório periódico;
+                            só o e-mail imediato deixa de sair, para não duplicar o aviso.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
                     <th>Caminhos ignorados</th>
                     <td>
                         <textarea name="vigilante_file_exclusions" rows="4" style="width: 100%; max-width: 560px; font-family: monospace;"

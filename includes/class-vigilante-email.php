@@ -193,6 +193,15 @@ class Vigilante_Email {
         Vigilante_Caixa::registrar($type, $message);
 
         $settings = get_option('vigilante_settings', []);
+
+        // Site onde a caixa é recolhida de fora (sentinela + health-check) recebe o
+        // alerta imediato pelo outro canal, e o e-mail do mesmo evento vira duplicata.
+        // Desligar aqui NÃO silencia nada: o depósito na caixa já aconteceu acima, o
+        // evento está no log de segurança e o relatório periódico continua saindo por
+        // e-mail. Padrão ligado, porque na maioria dos sites o e-mail é o único canal.
+        if (isset($settings['email_critical_alerts']) && !$settings['email_critical_alerts']) {
+            return true;
+        }
         $email = $settings['email'] ?? get_option('admin_email');
         $site  = get_bloginfo('name');
         $ip    = Vigilante_Logger::get_ip();
