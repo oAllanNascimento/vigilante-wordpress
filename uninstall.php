@@ -38,6 +38,8 @@ function vigilante_uninstall_cleanup() {
     delete_transient('vigilante_lock_security_log');
     delete_transient('vigilante_lock_email_log');
     delete_transient('vigilante_lock_caixa');
+    delete_transient('vigilante_atualizacao');
+    // Cache do canal de atualização anterior, em quem instalou o plugin antes da 1.5.0.
     delete_transient('vigilante_github_update');
 
     // Tarefas agendadas.

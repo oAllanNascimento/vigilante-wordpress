@@ -2,23 +2,29 @@
 /**
  * Vigilante_Updater
  *
- * Verifica atualizações no repositório GitHub público e integra
- * com o sistema nativo de updates do WordPress.
+ * Integra o plugin ao sistema nativo de atualização do WordPress lendo um
+ * manifesto estático publicado no site do autor.
  *
- * Para publicar uma atualização:
- * 1. Atualize a versão no header e constante VIGILANTE_VERSION
- * 2. Crie uma Release no GitHub com tag (ex: v0.2.0)
- * 3. O plugin detectará automaticamente em até 6 horas (ou ao clicar "Verificar novamente")
+ * O canal é um JSON público servido por HTTPS, sem chave nem token. O plugin é
+ * distribuído a terceiros, então qualquer credencial embutida aqui viajaria
+ * dentro do zip para máquinas e sites que não controlamos.
+ *
+ * Para publicar uma versão nova, ver scripts/publicar.mjs no repositório.
  */
 
 if (!defined('ABSPATH')) exit;
 
 class Vigilante_Updater {
 
-    const GITHUB_OWNER = 'oAllanNascimento';
-    const GITHUB_REPO  = 'vigilante-wordpress';
-    const CACHE_KEY    = 'vigilante_github_update';
-    const CACHE_TTL    = 6 * HOUR_IN_SECONDS;
+    /** Manifesto público com a versão corrente e a URL do zip. */
+    const MANIFESTO_URL = 'https://allannascimento.com.br/vigilante/atualizacao.json';
+
+    /** Página do produto, usada como homepage na tela de detalhes. */
+    const PAGINA_URL = 'https://allannascimento.com.br/vigilante/';
+
+    const CACHE_KEY       = 'vigilante_atualizacao';
+    const CACHE_TTL       = 6 * HOUR_IN_SECONDS;
+    const CACHE_TTL_FALHA = 15 * MINUTE_IN_SECONDS;
 
     /**
      * Registra os hooks do WordPress para update.
@@ -37,81 +43,112 @@ class Vigilante_Updater {
     }
 
     /**
-     * Consulta a API do GitHub para a última release.
-     * Resultado cacheado por CACHE_TTL.
+     * Lê o manifesto do canal de atualização. Resultado cacheado por CACHE_TTL.
      *
-     * Why /releases em vez de /releases/latest: "latest" ignora releases
-     * antigas em cenários de rollback e o histórico beta era todo
-     * prerelease. Buscamos a lista e escolhemos a primeira release
-     * ESTÁVEL (prerelease = false): cliente pagante nunca recebe beta.
+     * Devolve null em qualquer problema (rede, HTTP, JSON inválido, campo
+     * faltando). O painel de quem usa o plugin nunca pode quebrar nem exibir
+     * erro por causa do canal: sem manifesto válido, o site simplesmente segue
+     * na versão instalada.
      */
-    private static function get_remote_release() {
-        $cached = get_transient(self::CACHE_KEY);
-        if ($cached !== false) {
-            return $cached;
+    private static function get_manifesto() {
+        $cache = get_transient(self::CACHE_KEY);
+        if (is_array($cache)) {
+            // A falha também é cacheada, como array sem 'version'. Sem isso, um
+            // canal fora do ar seria consultado a cada carregamento do painel.
+            return empty($cache['version']) ? null : $cache;
         }
 
-        $url = sprintf(
-            'https://api.github.com/repos/%s/%s/releases?per_page=10',
-            self::GITHUB_OWNER,
-            self::GITHUB_REPO
-        );
-
-        $response = wp_remote_get($url, [
-            'headers' => [
-                'Accept'               => 'application/vnd.github+json',
-                'X-GitHub-Api-Version' => '2022-11-28',
-            ],
+        $resposta = wp_remote_get(self::MANIFESTO_URL, [
             'timeout' => 15,
+            'headers' => ['Accept' => 'application/json'],
         ]);
 
-        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
-            set_transient(self::CACHE_KEY, null, 5 * MINUTE_IN_SECONDS);
-            return null;
+        if (is_wp_error($resposta) || wp_remote_retrieve_response_code($resposta) !== 200) {
+            return self::cacheia_falha();
         }
 
-        $list = json_decode(wp_remote_retrieve_body($response), true);
-        $body = null;
-        if (is_array($list)) {
-            foreach ($list as $rel) {
-                if (is_array($rel) && empty($rel['prerelease']) && empty($rel['draft'])) {
-                    $body = $rel;
-                    break;
-                }
-            }
-        }
-        if (empty($body['tag_name'])) {
-            return null;
+        $dados = json_decode(wp_remote_retrieve_body($resposta), true);
+        if (!is_array($dados)) {
+            return self::cacheia_falha();
         }
 
-        $release = [
-            'version'     => ltrim($body['tag_name'], 'vV'),
-            'tag'         => $body['tag_name'],
-            'url'         => $body['html_url'] ?? '',
-            'body'        => $body['body'] ?? '',
-            'published'   => $body['published_at'] ?? '',
-            'zipball_url' => $body['zipball_url'] ?? '',
-        ];
-
-        // Preferir asset .zip se existir (mais confiável que zipball)
-        if (!empty($body['assets'])) {
-            foreach ($body['assets'] as $asset) {
-                if (str_ends_with($asset['name'], '.zip')) {
-                    $release['zip_url'] = $asset['browser_download_url'];
-                    break;
-                }
-            }
+        $manifesto = self::normaliza($dados);
+        if ($manifesto === null) {
+            return self::cacheia_falha();
         }
 
-        set_transient(self::CACHE_KEY, $release, self::CACHE_TTL);
-        return $release;
+        set_transient(self::CACHE_KEY, $manifesto, self::CACHE_TTL);
+        return $manifesto;
     }
 
     /**
-     * Retorna a URL do ZIP para download.
+     * Marca a falha no cache por uma janela curta e devolve null.
      */
-    private static function get_download_url($release) {
-        return $release['zip_url'] ?? $release['zipball_url'] ?? '';
+    private static function cacheia_falha() {
+        set_transient(self::CACHE_KEY, ['falhou' => 1], self::CACHE_TTL_FALHA);
+        return null;
+    }
+
+    /**
+     * Valida e normaliza o manifesto recebido.
+     *
+     * @return array|null Manifesto utilizável, ou null se faltar o essencial.
+     */
+    private static function normaliza($dados) {
+        $version  = self::texto($dados['version'] ?? '');
+        $download = self::url($dados['download_url'] ?? '');
+
+        // Versão e zip são os dois campos sem os quais não existe atualização
+        // possível. Manifesto incompleto vale como "não há nada novo".
+        if (!preg_match('/^\d+(\.\d+){0,3}([-+][0-9A-Za-z.]+)?$/', $version)) {
+            return null;
+        }
+        if (!self::download_valido($download)) {
+            return null;
+        }
+
+        $secoes = [];
+        if (!empty($dados['sections']) && is_array($dados['sections'])) {
+            foreach ($dados['sections'] as $chave => $valor) {
+                if (is_string($chave) && is_string($valor)) {
+                    $secoes[sanitize_key($chave)] = $valor;
+                }
+            }
+        }
+
+        return [
+            'version'      => $version,
+            'download_url' => $download,
+            'requires'     => self::texto($dados['requires'] ?? ''),
+            'requires_php' => self::texto($dados['requires_php'] ?? ''),
+            'tested'       => self::texto($dados['tested'] ?? ''),
+            'last_updated' => self::texto($dados['last_updated'] ?? ''),
+            'homepage'     => self::url($dados['homepage'] ?? '') ?: self::PAGINA_URL,
+            'sections'     => $secoes,
+        ];
+    }
+
+    /**
+     * O zip só é aceito por HTTPS: o WordPress instala o que baixar daqui sem
+     * pedir confirmação, então um endereço em texto claro é código executável
+     * entregue por um canal que qualquer intermediário pode trocar.
+     */
+    private static function download_valido($url) {
+        if ($url === '') {
+            return false;
+        }
+        if (strtolower((string) wp_parse_url($url, PHP_URL_SCHEME)) !== 'https') {
+            return false;
+        }
+        return (bool) wp_http_validate_url($url);
+    }
+
+    private static function texto($valor) {
+        return is_string($valor) ? sanitize_text_field($valor) : '';
+    }
+
+    private static function url($valor) {
+        return is_string($valor) ? esc_url_raw(trim($valor)) : '';
     }
 
     /**
@@ -122,29 +159,34 @@ class Vigilante_Updater {
             return $transient;
         }
 
-        $release = self::get_remote_release();
-        if (empty($release['version'])) {
+        $manifesto = self::get_manifesto();
+        if (empty($manifesto['version'])) {
             return $transient;
         }
 
         $plugin_slug = plugin_basename(VIGILANTE_PLUGIN_FILE);
 
-        if (version_compare(VIGILANTE_VERSION, $release['version'], '<')) {
+        if (version_compare(VIGILANTE_VERSION, $manifesto['version'], '<')) {
             $transient->response[$plugin_slug] = (object) [
-                'slug'        => dirname($plugin_slug),
-                'plugin'      => $plugin_slug,
-                'new_version' => $release['version'],
-                'url'         => $release['url'],
-                'package'     => self::get_download_url($release),
-                'icons'       => [],
-                'banners'     => [],
+                'id'           => $plugin_slug,
+                'slug'         => dirname($plugin_slug),
+                'plugin'       => $plugin_slug,
+                'new_version'  => $manifesto['version'],
+                'url'          => $manifesto['homepage'],
+                'package'      => $manifesto['download_url'],
+                'requires'     => $manifesto['requires'],
+                'requires_php' => $manifesto['requires_php'],
+                'tested'       => $manifesto['tested'],
+                'icons'        => [],
+                'banners'      => [],
             ];
         } else {
             $transient->no_update[$plugin_slug] = (object) [
+                'id'          => $plugin_slug,
                 'slug'        => dirname($plugin_slug),
                 'plugin'      => $plugin_slug,
                 'new_version' => VIGILANTE_VERSION,
-                'url'         => '',
+                'url'         => $manifesto['homepage'],
                 'package'     => '',
             ];
         }
@@ -165,34 +207,44 @@ class Vigilante_Updater {
             return $result;
         }
 
-        $release = self::get_remote_release();
-        if (empty($release)) {
+        $manifesto = self::get_manifesto();
+        if (empty($manifesto['version'])) {
             return $result;
+        }
+
+        // As seções chegam como HTML pronto do manifesto e vão para dentro do
+        // painel: passam por wp_kses_post para que o canal não consiga injetar
+        // script na tela de quem administra o site.
+        $secoes = [];
+        foreach ($manifesto['sections'] as $chave => $valor) {
+            $secoes[$chave] = wp_kses_post($valor);
+        }
+        if (empty($secoes)) {
+            $secoes['description'] = 'Monitor de segurança para WordPress com SMTP integrado, alertas em tempo real e relatório periódico.';
         }
 
         return (object) [
             'name'          => 'Vigilante de WordPress',
             'slug'          => $plugin_slug,
-            'version'       => $release['version'],
+            'version'       => $manifesto['version'],
             'author'        => '<a href="mailto:nascimento.allang@gmail.com">Allan Nascimento</a>',
-            'homepage'      => 'https://github.com/' . self::GITHUB_OWNER . '/' . self::GITHUB_REPO,
-            'download_link' => self::get_download_url($release),
-            'requires'      => '5.6',
-            'requires_php'  => '7.4',
-            'tested'        => get_bloginfo('version'),
-            'last_updated'  => $release['published'],
-            'sections'      => [
-                'description'  => 'Monitor de segurança para WordPress com SMTP integrado, alertas em tempo real e relatório diário.',
-                'changelog'    => nl2br(esc_html($release['body'])),
-            ],
+            'homepage'      => $manifesto['homepage'],
+            'download_link' => $manifesto['download_url'],
+            'requires'      => $manifesto['requires'] ?: '5.6',
+            'requires_php'  => $manifesto['requires_php'] ?: '8.0',
+            'tested'        => $manifesto['tested'] ?: get_bloginfo('version'),
+            'last_updated'  => $manifesto['last_updated'],
+            'sections'      => $secoes,
         ];
     }
 
     /**
      * Hook: corrige o nome do diretório após extração do ZIP.
      *
-     * O GitHub gera ZIPs com nome "owner-repo-hash/". O WordPress espera
-     * que o diretório corresponda ao slug do plugin.
+     * O WordPress instala o plugin na pasta com o nome que veio dentro do zip,
+     * e o plugin só continua sendo o mesmo (opções, agendamentos, ativação) se
+     * essa pasta for exatamente o slug atual. Vale como rede de proteção para
+     * zip gerado por outra ferramenta, que empacota com nome próprio.
      */
     public static function fix_directory_name($source, $remote_source, $upgrader, $hook_extra) {
         if (!isset($hook_extra['plugin'])) {
@@ -205,12 +257,12 @@ class Vigilante_Updater {
         }
 
         $expected_dir = trailingslashit($remote_source) . dirname($plugin_slug);
-        if ($source === $expected_dir) {
+        if (untrailingslashit($source) === $expected_dir) {
             return $source;
         }
 
         // Renomear para o nome esperado
-        $new_source = trailingslashit($remote_source) . dirname($plugin_slug) . '/';
+        $new_source = trailingslashit($expected_dir);
         if (@rename($source, $new_source)) {
             return $new_source;
         }
@@ -266,7 +318,8 @@ class Vigilante_Updater {
         if (empty($_GET['vigilante_force_update_check'])) {
             return;
         }
-        if (!current_user_can('update_plugins') || !wp_verify_nonce($_GET['_wpnonce'], 'vigilante_force_update_check')) {
+        $nonce = isset($_GET['_wpnonce']) ? sanitize_text_field(wp_unslash($_GET['_wpnonce'])) : '';
+        if (!current_user_can('update_plugins') || !wp_verify_nonce($nonce, 'vigilante_force_update_check')) {
             return;
         }
 

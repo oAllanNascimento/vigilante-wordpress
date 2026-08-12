@@ -2,9 +2,11 @@
 /**
  * Plugin Name: Vigilante de WordPress
  * Description: Monitor de segurança do WordPress (usuários, arquivos, logins, plugins) com SMTP integrado, relatórios por e-mail e diagnóstico.
- * Version: 1.4.0
+ * Version: 1.5.0
  * Author: Allan Nascimento
  * Author URI: mailto:nascimento.allang@gmail.com
+ * Plugin URI: https://allannascimento.com.br/vigilante/
+ * Update URI: https://allannascimento.com.br/vigilante/
  * Text Domain: vigilante-de-wordpress
  * Requires at least: 5.6
  * Requires PHP: 8.0
@@ -15,7 +17,7 @@ if (!defined('ABSPATH')) exit;
 // Constantes do plugin
 define('VIGILANTE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('VIGILANTE_PLUGIN_FILE', __FILE__);
-define('VIGILANTE_VERSION', '1.4.0');
+define('VIGILANTE_VERSION', '1.5.0');
 
 // Carregar classes
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-logger.php';
@@ -33,9 +35,14 @@ function vigilante_init() {
     Vigilante_Email::init();
     Vigilante_Monitor::init();
 
+    // Fora do painel de proposito: a checagem de atualizacao do WordPress roda pelo
+    // cron, sem is_admin(). Registrado so no painel, o filtro nunca era visto pelo
+    // cron e o site com atualizacao automatica ligada nunca recebia versao nova.
+    // Os ganchos de tela do updater (link, aviso) simplesmente nao disparam fora dele.
+    Vigilante_Updater::init();
+
     if (is_admin()) {
         Vigilante_Admin::init();
-        Vigilante_Updater::init();
     }
 }
 add_action('plugins_loaded', 'vigilante_init');

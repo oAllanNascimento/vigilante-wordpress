@@ -2,9 +2,9 @@
 Contributors: allannascimento
 Tags: seguranca, security, monitoramento, alertas, malware
 Requires at least: 5.6
-Tested up to: 6.5
+Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -77,6 +77,13 @@ Não. Ao remover o plugin, todas as opções, registros e tarefas agendadas são
 
 == Changelog ==
 
+= 1.5.0 =
+* A verificação de atualização passa a ler um canal próprio no site do autor (`allannascimento.com.br/vigilante`), no lugar do repositório de código. O plugin continua sem enviar dado nenhum do seu site e sem exigir chave, licença ou cadastro: a consulta é a leitura de um arquivo público.
+* Canal fora do ar, resposta inválida ou campo faltando não geram erro no painel. O site segue na versão instalada e a verificação é repetida depois.
+* O zip da atualização só é aceito por HTTPS, porque é código que o WordPress instala sem perguntar.
+* O plugin passa a declarar seu próprio endereço de atualização (`Update URI`), o que impede que um plugin de mesmo nome no diretório oficial seja instalado por cima dele.
+* Correção: a verificação de atualização só era registrada dentro do painel, então o site com atualização automática ligada nunca recebia versão nova, porque essa checagem roda pelo agendador, fora do painel.
+
 = 1.4.0 =
 * Arquivo executável (php, phtml, phar, inc, shtml) e .htaccess passam a ser vigiados em **qualquer profundidade**, em vez de parar dois níveis abaixo de cada pasta monitorada. A varredura antiga não via um backdoor guardado dentro de `assets/js/` de um plugin, que é onde ele costuma ficar. Num site real isso significou passar de 3.137 para 22.395 arquivos vigiados.
 * Passam a ser varridos também o resto de `wp-content` (cache, languages, upgrade) e as pastas soltas na raiz do site, que nunca foram olhadas.
@@ -95,7 +102,7 @@ Não. Ao remover o plugin, todas as opções, registros e tarefas agendadas são
 * Achado repetido de arquivo não gera e-mail novo dentro de 24 horas. Ele continua no log e aparece resumido no próximo alerta, com a contagem de vezes.
 * Lista de caminhos ignorados na vigilância de arquivos, configurável no painel, com curinga. Cada caminho ignorado aparece no relatório periódico, pra não virar ponto cego esquecido.
 * Atualizar o snapshot pelo painel também zera o estado de repetição.
-* Motivo das duas mudanças: no Hospital da Plástica, o All-in-One WP Migration apagava e recriava o próprio `storage/.htaccess` uma vez por dia, e o Vigilante alertava certo, todo dia, por semanas. Monitor que repete achado conhecido treina quem lê a ignorar o canal.
+* Motivo das duas mudanças: plugin de backup que apaga e recria o próprio `.htaccess` todo dia faz o Vigilante alertar certo, todo dia, por semanas. Monitor que repete achado conhecido treina quem lê a ignorar o canal.
 
 = 1.0.0 =
 * Primeira versão estável.
