@@ -111,7 +111,14 @@ class Vigilante_Monitor {
     // ─── PLUGINS E TEMAS ───
 
     public static function on_plugin_activated($plugin) {
-        self::log_and_alert('plugin_ativado', "Plugin ativado: {$plugin}", true);
+        // 1.6.0: ativação pelo shell do servidor (WP-CLI) ou pelo agendador, durante
+        // update, é nossa ou automática: fica no log, sem alerta.
+        $via_cli = defined('WP_CLI') && WP_CLI;
+        $durante_update = (function_exists('wp_doing_cron') && wp_doing_cron())
+            || did_action('upgrader_process_complete') > 0;
+        $alerta = Vigilante_Regua::ativacao_alerta($via_cli, $durante_update);
+        $origem = $via_cli ? ' (WP-CLI)' : ($durante_update ? ' (durante atualização)' : '');
+        self::log_and_alert('plugin_ativado', "Plugin ativado: {$plugin}{$origem}", $alerta);
     }
 
     public static function on_plugin_deactivated($plugin) {
@@ -126,6 +133,26 @@ class Vigilante_Monitor {
         $type   = $options['type'] ?? 'desconhecido';
         $action = $options['action'] ?? '';
         Vigilante_Logger::log_event('atualizacao', "Atualização realizada: {$type} ({$action})");
+
+        // Guarda o que foi atualizado, para a varredura de arquivos da próxima hora
+        // saber que aqueles arquivos mudaram por update (Vigilante_Regua).
+        $itens = [];
+        if ($type === 'plugin') {
+            $itens = (array) ($options['plugins'] ?? (isset($options['plugin']) ? [$options['plugin']] : []));
+        } elseif ($type === 'theme') {
+            $itens = (array) ($options['themes'] ?? (isset($options['theme']) ? [$options['theme']] : []));
+        }
+        $lista   = self::updates_recentes();
+        $lista[] = ['tipo' => $type, 'itens' => array_values($itens), 'quando' => time()];
+        update_option(self::UPDATES_OPTION, array_slice($lista, -50), false);
+    }
+
+    const UPDATES_OPTION = 'vigilante_updates_recentes';
+
+    /** Updates das últimas 24 horas (o resto é podado na leitura). */
+    public static function updates_recentes() {
+        $lista = (array) get_option(self::UPDATES_OPTION, []);
+        return array_values(array_filter($lista, fn($u) => (time() - (int) ($u['quando'] ?? 0)) < DAY_IN_SECONDS));
     }
 
     // ─── HELPER ───

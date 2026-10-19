@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Vigilante de WordPress
  * Description: Monitor de segurança do WordPress (usuários, arquivos, logins, plugins) com SMTP integrado, relatórios por e-mail e diagnóstico.
- * Version: 1.5.0
+ * Version: 1.6.0
  * Author: Allan Nascimento
  * Author URI: mailto:nascimento.allang@gmail.com
  * Plugin URI: https://allannascimento.com.br/vigilante/
@@ -17,11 +17,12 @@ if (!defined('ABSPATH')) exit;
 // Constantes do plugin
 define('VIGILANTE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('VIGILANTE_PLUGIN_FILE', __FILE__);
-define('VIGILANTE_VERSION', '1.5.0');
+define('VIGILANTE_VERSION', '1.6.0');
 
 // Carregar classes
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-logger.php';
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-caixa.php';
+require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-regua.php';
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-email.php';
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-file-scanner.php';
 require_once VIGILANTE_PLUGIN_DIR . 'includes/class-vigilante-monitor.php';
@@ -60,6 +61,29 @@ add_action('vigilante_daily_report', function () {
 add_action('vigilante_hourly_file_check', function () {
     $changes = Vigilante_File_Scanner::check_changes();
 
+    if (empty($changes)) {
+        return;
+    }
+
+    // 1.6.0: o que um update recente ou a faxina de um plugin explica fica no log,
+    // sem e-mail e sem caixa. Alerta é para mudança de terceiro ou sinal de malware.
+    $updates    = Vigilante_Monitor::updates_recentes();
+    $explicadas = [];
+    $resto      = [];
+    foreach ($changes as $c) {
+        if (Vigilante_Regua::mudanca_explicada($c, $updates, time())) {
+            $explicadas[] = $c;
+        } else {
+            $resto[] = $c;
+        }
+    }
+    if ($explicadas) {
+        $linhas = array_map(fn($c) => "{$c['action']}: {$c['path']}", array_slice($explicadas, 0, 50));
+        Vigilante_Logger::log_event('arquivo_alterado',
+            count($explicadas) . " alteração(ões) explicada(s) por atualização ou faxina de plugin (sem alerta):\n"
+            . implode("\n", $linhas), false);
+    }
+    $changes = $resto;
     if (empty($changes)) {
         return;
     }

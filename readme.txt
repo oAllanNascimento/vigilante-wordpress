@@ -4,7 +4,7 @@ Tags: seguranca, security, monitoramento, alertas, malware
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -76,6 +76,12 @@ Não. O plugin exige PHP 8.0 ou superior.
 Não. Ao remover o plugin, todas as opções, registros e tarefas agendadas são apagadas.
 
 == Changelog ==
+
+= 1.6.0 =
+* Alerta só para o que importa: mudança feita por terceiro ou sinal de malware. Arquivo mexido por uma atualização do WordPress, de plugin, de tema ou de tradução nas últimas 3 horas fica registrado no log, sem e-mail. Arquivo de núcleo, plugin ou tema mexido fora de atualização continua alertando na hora, assim como PHP em uploads.
+* A faxina que o All-in-One WP Migration faz na própria pasta temporária (apaga e recria o `.htaccess` e o `index.php` de proteção) deixa de virar alerta, desde que o arquivo no disco seja o de proteção. Um `.htaccess` ali que liga PHP, ou um `index.php` com código, continua alertando.
+* Plugin ativado pelo servidor (WP-CLI) ou pelo agendador durante uma atualização fica no log, sem alerta. Ativado pelo painel continua alertando.
+* O relatório periódico só é enviado quando houve evento crítico no período. O relatório de "nenhuma atividade registrada" deixa de sair.
 
 = 1.5.0 =
 * A verificação de atualização passa a ler um canal próprio no site do autor (`allannascimento.com.br/vigilante`), no lugar do repositório de código. O plugin continua sem enviar dado nenhum do seu site e sem exigir chave, licença ou cadastro: a consulta é a leitura de um arquivo público.

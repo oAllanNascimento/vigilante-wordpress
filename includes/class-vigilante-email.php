@@ -237,6 +237,12 @@ class Vigilante_Email {
 
         $logs  = Vigilante_Logger::get_recent_logs($hours);
 
+        // 1.6.0: relatório sem nenhum evento crítico no período não sai. Era o
+        // "Nenhuma atividade registrada" que chegava todo dia e ensinava a não abrir.
+        if (!Vigilante_Regua::relatorio_relevante($logs)) {
+            return true;
+        }
+
         $admin_count = count(get_users(['role' => 'administrator']));
 
         // Contagem por tipo

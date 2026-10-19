@@ -24,6 +24,7 @@ function vigilante_uninstall_cleanup() {
         'vigilante_file_alert_state',
         'vigilante_migrou_semanal',
         'vigilante_caixa',
+        'vigilante_updates_recentes',
         'vigilante_crypto_key',
         // Opções legadas da versão em arquivo único.
         'osb_security_log',
